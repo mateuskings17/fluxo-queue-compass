@@ -298,7 +298,10 @@ export function QueuesAdmin({ config }: { config: AppConfig }) {
           onClick={async () => {
             if (!window.confirm("Encerrar todas as senhas em aberto?")) return;
             const { data, error } = await supabase.rpc("close_open_tickets");
-            if (error) return toast.error(error.message);
+            if (error) {
+              toast.error(error.message);
+              return;
+            }
             toast.success(`${data ?? 0} senha(s) encerrada(s)`);
             void qc.invalidateQueries({ queryKey: ["queue"] });
           }}

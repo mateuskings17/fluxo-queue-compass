@@ -84,7 +84,10 @@ function Reports() {
     const byType = new Map<string, number>();
     tickets.forEach((t) => byType.set(t.type_name, (byType.get(t.type_name) ?? 0) + 1));
     const hours = Array.from({ length: 24 }, (_, h) => ({ hora: `${String(h).padStart(2, "0")}h`, senhas: 0 }));
-    tickets.forEach((t) => hours[new Date(t.created_at).getHours()].senhas++);
+    tickets.forEach((t) => {
+      const h = hours[new Date(t.created_at).getHours()];
+      if (h) h.senhas++;
+    });
     const firstHour = hours.findIndex((h) => h.senhas > 0);
     const lastHour = 23 - [...hours].reverse().findIndex((h) => h.senhas > 0);
 
@@ -125,7 +128,7 @@ function Reports() {
     tickets.forEach((t) =>
       t.steps.sort((a, b) => a.seq - b.seq).forEach((s) =>
         rows.push([
-          t.code, t.type_name, t.priority ? "sim" : "não", t.patient_name ?? "", TICKET_STATUS_LABEL[t.status], t.created_at,
+          t.code, t.type_name, t.priority ? "sim" : "não", t.patient_name ?? "", TICKET_STATUS_LABEL[t.status] ?? t.status, t.created_at,
           s.sector_name, s.station_name ?? "", s.attendant_name ?? "", s.status, s.queued_at ?? "", s.called_at ?? "", s.started_at ?? "", s.finished_at ?? "",
           String(Math.round((minutesBetween(s.queued_at, s.called_at) ?? 0) * 10) / 10),
           String(Math.round((minutesBetween(s.started_at ?? s.called_at, s.finished_at) ?? 0) * 10) / 10),

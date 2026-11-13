@@ -129,10 +129,10 @@ export function PanelVoiceSettings({ settings }: { settings: Settings }) {
             <Switch checked={form.chime_enabled} onCheckedChange={(v) => setForm({ ...form, chime_enabled: v })} />
           </label>
           <Field label={`Volume: ${Math.round(form.voice_volume * 100)}%`}>
-            <Slider min={0} max={1} step={0.05} value={[form.voice_volume]} onValueChange={([v]) => setForm({ ...form, voice_volume: v })} />
+            <Slider min={0} max={1} step={0.05} value={[form.voice_volume]} onValueChange={([v]) => setForm({ ...form, voice_volume: v ?? form.voice_volume })} />
           </Field>
           <Field label={`Velocidade da voz: ${form.voice_rate.toFixed(2)}x`}>
-            <Slider min={0.5} max={1.5} step={0.05} value={[form.voice_rate]} onValueChange={([v]) => setForm({ ...form, voice_rate: v })} />
+            <Slider min={0.5} max={1.5} step={0.05} value={[form.voice_rate]} onValueChange={([v]) => setForm({ ...form, voice_rate: v ?? form.voice_rate })} />
           </Field>
           <Field label="Repetir anúncio (vezes)">
             <Input type="number" min={1} max={3} value={form.voice_repeat} onChange={(e) => setForm({ ...form, voice_repeat: Math.min(3, Math.max(1, Number(e.target.value) || 1)) })} />

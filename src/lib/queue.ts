@@ -115,7 +115,7 @@ export const ticketDetailQuery = (ticketId: string) =>
 
 export async function issueTicket(typeId: string, patientName?: string) {
   return unwrap(
-    await supabase.rpc("issue_ticket", { p_type_id: typeId, p_patient_name: patientName ?? undefined }),
+    await supabase.rpc("issue_ticket", { p_type_id: typeId, ...(patientName ? { p_patient_name: patientName } : {}) }),
   ) as Ticket;
 }
 
@@ -124,8 +124,8 @@ export async function callNext(sectorId: string, stationId: string, attendant: s
     await supabase.rpc("call_next", {
       p_sector_id: sectorId,
       p_station_id: stationId,
-      p_attendant: attendant || undefined,
-      p_type_ids: typeIds.length ? typeIds : undefined,
+      ...(attendant ? { p_attendant: attendant } : {}),
+      ...(typeIds.length ? { p_type_ids: typeIds } : {}),
     }),
   ) as TicketStep | null;
   return data && data.id ? data : null;
@@ -133,26 +133,26 @@ export async function callNext(sectorId: string, stationId: string, attendant: s
 
 export async function callStep(stepId: string, stationId: string, attendant: string) {
   return unwrap(
-    await supabase.rpc("call_step", { p_step_id: stepId, p_station_id: stationId, p_attendant: attendant || undefined }),
+    await supabase.rpc("call_step", { p_step_id: stepId, p_station_id: stationId, ...(attendant ? { p_attendant: attendant } : {}) }),
   );
 }
 
 export async function startStep(stepId: string, attendant: string) {
-  return unwrap(await supabase.rpc("start_step", { p_step_id: stepId, p_attendant: attendant || undefined }));
+  return unwrap(await supabase.rpc("start_step", { p_step_id: stepId, ...(attendant ? { p_attendant: attendant } : {}) }));
 }
 
 export async function finishStep(stepId: string, forwardSectorIds: string[], attendant: string) {
   return unwrap(
     await supabase.rpc("finish_step", {
       p_step_id: stepId,
-      p_forward_sector_ids: forwardSectorIds.length ? forwardSectorIds : undefined,
-      p_attendant: attendant || undefined,
+      ...(forwardSectorIds.length ? { p_forward_sector_ids: forwardSectorIds } : {}),
+      ...(attendant ? { p_attendant: attendant } : {}),
     }),
   ) as Ticket;
 }
 
 export async function markNoShow(stepId: string, attendant: string) {
-  return unwrap(await supabase.rpc("mark_no_show", { p_step_id: stepId, p_attendant: attendant || undefined }));
+  return unwrap(await supabase.rpc("mark_no_show", { p_step_id: stepId, ...(attendant ? { p_attendant: attendant } : {}) }));
 }
 
 export async function requeueStep(stepId: string) {
@@ -160,7 +160,7 @@ export async function requeueStep(stepId: string) {
 }
 
 export async function cancelTicket(ticketId: string, reason?: string) {
-  return unwrap(await supabase.rpc("cancel_ticket", { p_ticket_id: ticketId, p_reason: reason ?? undefined }));
+  return unwrap(await supabase.rpc("cancel_ticket", { p_ticket_id: ticketId, ...(reason ? { p_reason: reason } : {}) }));
 }
 
 export async function setPatientName(ticketId: string, name: string) {
