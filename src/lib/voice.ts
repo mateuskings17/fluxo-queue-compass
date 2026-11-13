@@ -39,28 +39,49 @@ export function playChime(volume = 1): Promise<void> {
   });
 }
 
+export function isSpeechSynthesisSupported(): boolean {
+  return typeof window !== "undefined" &&
+    "speechSynthesis" in window &&
+    typeof window.SpeechSynthesisUtterance !== "undefined";
+}
+
 function pickVoice(): SpeechSynthesisVoice | undefined {
   const voices = window.speechSynthesis.getVoices();
+  const brazilian = voices.filter((voice) => voice.lang.toLowerCase() === "pt-br");
+  const female = brazilian.find((voice) =>
+    /female|feminina|francisca|luciana|camila|fernanda|maria|helena|brasil.*fem/i.test(voice.name),
+  );
+
   return (
-    voices.find((v) => v.lang === "pt-BR" && /google|natural|online/i.test(v.name)) ||
-    voices.find((v) => v.lang === "pt-BR") ||
-    voices.find((v) => v.lang.startsWith("pt"))
+    female ||
+    brazilian.find((voice) => /google|natural|online/i.test(voice.name)) ||
+    brazilian[0] ||
+    voices.find((voice) => voice.lang.toLowerCase().startsWith("pt"))
   );
 }
 
 export function speak(text: string, opts: { volume: number; rate: number }): Promise<void> {
   return new Promise((resolve) => {
-    if (typeof window === "undefined" || !("speechSynthesis" in window)) return resolve();
+    if (!isSpeechSynthesisSupported()) return resolve();
     const u = new SpeechSynthesisUtterance(text);
     u.lang = "pt-BR";
     const v = pickVoice();
     if (v) u.voice = v;
     u.volume = Math.min(1, Math.max(0, opts.volume));
     u.rate = Math.min(2, Math.max(0.5, opts.rate));
-    const done = () => resolve();
-    u.onend = done;
-    u.onerror = done;
-    setTimeout(done, 15000);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve();
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    const timeout = setTimeout(() => {
+      window.speechSynthesis.cancel();
+      finish();
+    }, 30000);
     window.speechSynthesis.speak(u);
   });
 }
