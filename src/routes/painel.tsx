@@ -59,10 +59,10 @@ function Panel() {
         if (!call.id || seenCallIdsRef.current.has(call.id)) return;
         seenCallIdsRef.current.add(call.id);
         void qc.invalidateQueries({ queryKey: ["calls"] });
+        if (!soundRef.current) return;
         announcerRef.current?.(async () => {
           setFlashKey(call.id);
           const s = settingsRef.current;
-          if (!soundRef.current) return;
           const volume = Number(s.voice_volume);
           if (s.chime_enabled) await playChime(volume);
           const text = buildAnnouncement(s.voice_template, call, true);
@@ -84,15 +84,12 @@ function Panel() {
   function enableSound() {
     if (!isSpeechSynthesisSupported()) {
       setSpeechAvailable(false);
+      setSoundOn(true);
+      window.alert("Este navegador não oferece suporte à síntese de voz (SpeechSynthesis). O painel continuará funcionando sem anúncios falados.");
       return;
     }
     unlockAudio();
     setSoundOn(true);
-    try {
-      window.localStorage.setItem("fila:painel:voz-ativada", "true");
-    } catch {
-      // O armazenamento pode estar bloqueado no navegador da TV.
-    }
   }
 
   return (
