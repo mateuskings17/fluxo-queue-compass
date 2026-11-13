@@ -69,10 +69,19 @@ export function speak(text: string, opts: { volume: number; rate: number }): Pro
     if (v) u.voice = v;
     u.volume = Math.min(1, Math.max(0, opts.volume));
     u.rate = Math.min(2, Math.max(0.5, opts.rate));
-    const done = () => resolve();
-    u.onend = done;
-    u.onerror = done;
-    setTimeout(done, 15000);
+    let settled = false;
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timeout);
+      resolve();
+    };
+    u.onend = finish;
+    u.onerror = finish;
+    const timeout = setTimeout(() => {
+      window.speechSynthesis.cancel();
+      finish();
+    }, 30000);
     window.speechSynthesis.speak(u);
   });
 }
