@@ -4,7 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Maximize, Volume2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { buildAnnouncement, configQuery, recentCallsQuery, formatTime, type Call } from "@/lib/queue";
-import { createAnnouncer, playChime, speak, unlockAudio } from "@/lib/voice";
+import { createAnnouncer, isSpeechSynthesisSupported, playChime, speak, unlockAudio } from "@/lib/voice";
 import { useConfigRealtime } from "@/hooks/use-realtime";
 import { UnitLogo } from "@/components/queue/Brand";
 import { Clock } from "@/components/queue/Clock";
@@ -40,7 +40,9 @@ function Panel() {
   const qc = useQueryClient();
   const { settings } = config;
   const [soundOn, setSoundOn] = useState(false);
+  const [speechAvailable, setSpeechAvailable] = useState(true);
   const [flashKey, setFlashKey] = useState<string | null>(null);
+  const seenCallIdsRef = useRef<Set<string>>(new Set(calls.map((call) => call.id)));
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const soundRef = useRef(soundOn);
@@ -48,24 +50,23 @@ function Panel() {
   const announcerRef = useRef<ReturnType<typeof createAnnouncer> | null>(null);
 
   useEffect(() => {
+    setSpeechAvailable(isSpeechSynthesisSupported());
     announcerRef.current = createAnnouncer();
     const channel = supabase
       .channel(`panel-calls-${Math.random().toString(36).slice(2)}`)
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "calls" }, (payload) => {
         const call = payload.new as Call;
+        if (!call.id || seenCallIdsRef.current.has(call.id)) return;
+        seenCallIdsRef.current.add(call.id);
         void qc.invalidateQueries({ queryKey: ["calls"] });
+        if (!soundRef.current) return;
         announcerRef.current?.(async () => {
           setFlashKey(call.id);
           const s = settingsRef.current;
-          if (!soundRef.current) return;
           const volume = Number(s.voice_volume);
           if (s.chime_enabled) await playChime(volume);
-          if (s.voice_enabled) {
-            const text = buildAnnouncement(s.voice_template, call, true);
-            for (let i = 0; i < Math.max(1, s.voice_repeat); i++) {
-              await speak(text, { volume, rate: Number(s.voice_rate) });
-            }
-          }
+          const text = buildAnnouncement(s.voice_template, call, true);
+          await speak(text, { volume, rate: Number(s.voice_rate) });
           await new Promise((r) => setTimeout(r, 600));
         });
       })
@@ -81,6 +82,12 @@ function Panel() {
   const history = calls.slice(1, 1 + Math.max(1, settings.panel_history_count));
 
   function enableSound() {
+    if (!isSpeechSynthesisSupported()) {
+      setSpeechAvailable(false);
+      setSoundOn(true);
+      window.alert("Este navegador não oferece suporte à síntese de voz (SpeechSynthesis). O painel continuará funcionando sem anúncios falados.");
+      return;
+    }
     unlockAudio();
     setSoundOn(true);
   }
@@ -162,8 +169,12 @@ function Panel() {
         >
           <div className="flex flex-col items-center gap-4 rounded-3xl border border-panel-border bg-panel-raised px-12 py-10">
             <Volume2 className="h-14 w-14 text-call" />
-            <div className="text-3xl font-bold">Toque para ativar o som do painel</div>
-            <div className="text-panel-muted">O navegador exige um toque antes de liberar a voz e os avisos sonoros.</div>
+            <div className="text-3xl font-bold">ATIVAR VOZ</div>
+            <div className="text-panel-muted">
+              {speechAvailable
+                ? "Toque para liberar os anúncios de senhas pelos alto-falantes da TV."
+                : "Este navegador não oferece suporte à síntese de voz. O painel continuará funcionando sem anúncios falados."}
+            </div>
           </div>
         </button>
       )}
