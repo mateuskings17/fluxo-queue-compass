@@ -10,33 +10,102 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AdminRouteImport } from './routes/admin'
+import { Route as PainelRouteImport } from './routes/painel'
+import { Route as RelatoriosRouteImport } from './routes/relatorios'
+import { Route as TotemRouteImport } from './routes/totem'
+import { Route as AtendimentoSectorIdRouteImport } from './routes/atendimento.$sectorId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AdminRoute = AdminRouteImport.update({
+  id: '/admin',
+  path: '/admin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const PainelRoute = PainelRouteImport.update({
+  id: '/painel',
+  path: '/painel',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const RelatoriosRoute = RelatoriosRouteImport.update({
+  id: '/relatorios',
+  path: '/relatorios',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TotemRoute = TotemRouteImport.update({
+  id: '/totem',
+  path: '/totem',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AtendimentoSectorIdRoute = AtendimentoSectorIdRouteImport.update({
+  id: '/atendimento/$sectorId',
+  path: '/atendimento/$sectorId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/painel': typeof PainelRoute
+  '/relatorios': typeof RelatoriosRoute
+  '/totem': typeof TotemRoute
+  '/atendimento/$sectorId': typeof AtendimentoSectorIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/painel': typeof PainelRoute
+  '/relatorios': typeof RelatoriosRoute
+  '/totem': typeof TotemRoute
+  '/atendimento/$sectorId': typeof AtendimentoSectorIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/admin': typeof AdminRoute
+  '/painel': typeof PainelRoute
+  '/relatorios': typeof RelatoriosRoute
+  '/totem': typeof TotemRoute
+  '/atendimento/$sectorId': typeof AtendimentoSectorIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths:
+    | '/'
+    | '/admin'
+    | '/painel'
+    | '/relatorios'
+    | '/totem'
+    | '/atendimento/$sectorId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to:
+    | '/'
+    | '/admin'
+    | '/painel'
+    | '/relatorios'
+    | '/totem'
+    | '/atendimento/$sectorId'
+  id:
+    | '__root__'
+    | '/'
+    | '/admin'
+    | '/painel'
+    | '/relatorios'
+    | '/totem'
+    | '/atendimento/$sectorId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AdminRoute: typeof AdminRoute
+  PainelRoute: typeof PainelRoute
+  RelatoriosRoute: typeof RelatoriosRoute
+  TotemRoute: typeof TotemRoute
+  AtendimentoSectorIdRoute: typeof AtendimentoSectorIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +117,51 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/admin': {
+      id: '/admin'
+      path: '/admin'
+      fullPath: '/admin'
+      preLoaderRoute: typeof AdminRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/painel': {
+      id: '/painel'
+      path: '/painel'
+      fullPath: '/painel'
+      preLoaderRoute: typeof PainelRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/relatorios': {
+      id: '/relatorios'
+      path: '/relatorios'
+      fullPath: '/relatorios'
+      preLoaderRoute: typeof RelatoriosRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/totem': {
+      id: '/totem'
+      path: '/totem'
+      fullPath: '/totem'
+      preLoaderRoute: typeof TotemRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/atendimento/$sectorId': {
+      id: '/atendimento/$sectorId'
+      path: '/atendimento/$sectorId'
+      fullPath: '/atendimento/$sectorId'
+      preLoaderRoute: typeof AtendimentoSectorIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AdminRoute: AdminRoute,
+  PainelRoute: PainelRoute,
+  RelatoriosRoute: RelatoriosRoute,
+  TotemRoute: TotemRoute,
+  AtendimentoSectorIdRoute: AtendimentoSectorIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
