@@ -1,7 +1,7 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Download, History, Search } from "lucide-react";
+import { Download, History, Search, Save, Trash2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
 import { configQuery, formatMinutes, minutesBetween, TICKET_STATUS_LABEL, todayISO, type Ticket, type TicketStep } from "@/lib/queue";
@@ -29,6 +29,35 @@ export const Route = createFileRoute("/relatorios")({
 });
 
 type TicketWithSteps = Ticket & { steps: TicketStep[] };
+
+type SavedReport = {
+  id: string;
+  from: string;
+  to: string;
+  createdAt: string;
+  total: number;
+  completed: number;
+  active: number;
+  absent: number;
+  cancelled: number;
+  avgWait: string;
+  avgService: string;
+  avgTotal: string;
+  sectors: { name: string; total: number; done: number; noShow: number; waiting: number }[];
+  types: [string, number][];
+};
+
+const SAVED_REPORTS_KEY = "fluxo-queue-compass:saved-reports";
+
+function loadSavedReports(): SavedReport[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const value = window.localStorage.getItem(SAVED_REPORTS_KEY);
+    return value ? (JSON.parse(value) as SavedReport[]) : [];
+  } catch {
+    return [];
+  }
+}
 
 async function fetchRange(from: string, to: string): Promise<TicketWithSteps[]> {
   const start = new Date(`${from}T00:00:00`);
@@ -61,7 +90,7 @@ function Reports() {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [search, setSearch] = useState("");
-  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [historyId, setHistoryId] = useState<string | null>(null);\n  const [savedReports, setSavedReports] = useState<SavedReport[]>(loadSavedReports);\n  const [saveMessage, setSaveMessage] = useState("");
 
   const { data: tickets = [], isFetching, error } = useQuery({
     queryKey: ["report", from, to],
@@ -123,6 +152,42 @@ function Reports() {
     .slice()
     .reverse();
 
+  function persistSavedReports(next: SavedReport[]) {
+    try {
+      window.localStorage.setItem(SAVED_REPORTS_KEY, JSON.stringify(next));
+      setSavedReports(next);
+      setSaveMessage("");
+    } catch {
+      setSaveMessage("Não foi possível salvar. O armazenamento deste navegador pode estar cheio.");
+    }
+  }
+
+  function saveReport() {
+    const report: SavedReport = {
+      id: typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`,
+      from,
+      to,
+      createdAt: new Date().toISOString(),
+      total: stats.total,
+      completed: stats.completed,
+      active: stats.active,
+      absent: stats.absent,
+      cancelled: stats.cancelled,
+      avgWait: formatMinutes(stats.avgWait),
+      avgService: formatMinutes(stats.avgService),
+      avgTotal: formatMinutes(stats.avgTotal),
+      sectors: stats.sectors.map(({ name, total, done, noShow, waiting }) => ({ name, total, done, noShow, waiting })),
+      types: stats.types,
+    };
+    persistSavedReports([report, ...savedReports]);
+  }
+
+  function deleteReport(report: SavedReport) {
+    const period = report.from === report.to ? report.from : `${report.from} até ${report.to}`;
+    if (!window.confirm(`Deseja realmente excluir o relatório do período ${period}? As senhas e os atendimentos não serão apagados.`)) return;
+    persistSavedReports(savedReports.filter((item) => item.id !== report.id));
+  }
+
   function exportCsv() {
     const rows = [["senha", "tipo", "preferencial", "paciente", "status_senha", "emitida", "setor", "posicao", "atendente", "status_etapa", "entrou_fila", "chamada", "inicio", "fim", "espera_min", "atendimento_min"]];
     tickets.forEach((t) =>
@@ -154,7 +219,7 @@ function Reports() {
             <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
             <span className="text-sm text-muted-foreground">até</span>
             <Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
-            <Button variant="outline" onClick={exportCsv} disabled={!tickets.length}><Download /> CSV</Button>
+            <Button variant="outline" onClick={saveReport} disabled={!tickets.length || isFetching}><Save /> Salvar relatório</Button>\n            <Button variant="outline" onClick={exportCsv} disabled={!tickets.length}><Download /> CSV</Button>
           </>
         }
       />
@@ -169,6 +234,33 @@ function Reports() {
           <Kpi label="Atendimento médio" value={formatMinutes(stats.avgService)} />
           <Kpi label="Permanência média" value={formatMinutes(stats.avgTotal)} />
         </div>
+
+        {saveMessage && <p className="rounded-xl bg-priority-soft p-3 text-sm text-priority">{saveMessage}</p>}
+
+        <Card title={`Relatórios salvos (${savedReports.length})`}>
+          {savedReports.length ? (
+            <div className="space-y-3">
+              {savedReports.map((report) => (
+                <div key={report.id} className="flex flex-col gap-3 rounded-xl border p-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="font-semibold">
+                      {report.from === report.to ? report.from : `${report.from} até ${report.to}`}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Salvo em {new Date(report.createdAt).toLocaleString("pt-BR")} · {report.total} senhas · {report.completed} finalizadas
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Espera média: {report.avgWait} · Atendimento médio: {report.avgService}
+                    </p>
+                  </div>
+                  <Button size="sm" variant="destructive" onClick={() => deleteReport(report)}>
+                    <Trash2 /> Excluir relatório
+                  </Button>
+                </div>
+              ))}
+            </div>
+          ) : <p className="py-5 text-center text-sm text-muted-foreground">Nenhum relatório salvo. Gere um período e clique em “Salvar relatório”.</p>}
+        </Card>
 
         <div className="grid gap-6 lg:grid-cols-[1.4fr_1fr]">
           <Card title="Senhas por hora">
