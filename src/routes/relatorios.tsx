@@ -200,7 +200,13 @@ function Reports() {
         ]),
       ),
     );
-    const csv = rows.map((r) => r.map((c) => `"${String(c).replaceAll('"', '""')}"`).join(";")).join("\n");
+    // Neutralize spreadsheet formulas: text starting with = + - @ or control chars is prefixed with an apostrophe.
+    const cell = (c: unknown) => {
+      let v = String(c ?? "");
+      if (typeof c !== "number" && /^[=+\-@\t\r]/.test(v)) v = "'" + v;
+      return `"${v.replaceAll('"', '""')}"`;
+    };
+    const csv = rows.map((r) => r.map(cell).join(";")).join("\n");
     const blob = new Blob(["\ufeff" + csv], { type: "text/csv;charset=utf-8" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
