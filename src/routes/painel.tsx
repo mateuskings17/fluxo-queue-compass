@@ -3,7 +3,16 @@ import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Maximize, Volume2 } from "lucide-react";
 import { buildAnnouncement, configQuery, recentCallsQuery, formatTime, type Call } from "@/lib/queue";
-import { createAnnouncer, isSpeechSynthesisSupported, playChime, speak, unlockAudio } from "@/lib/voice";
+import {
+  createAnnouncer,
+  isSpeechSynthesisSupported,
+  playChime,
+  prepareVoice,
+  speak,
+  tryRestoreAudio,
+  unlockAudio,
+} from "@/lib/voice";
+import { pickCallsToAnnounce } from "@/lib/announce";
 import { useConfigRealtime, useRealtimeInvalidate } from "@/hooks/use-realtime";
 import { UnitLogo } from "@/components/queue/Brand";
 import { Clock } from "@/components/queue/Clock";
@@ -11,6 +20,10 @@ import { Button } from "@/components/ui/button";
 import { RouteError, RouteNotFound } from "@/components/queue/RouteError";
 
 const CALLS_LIMIT = 13;
+/** Remembers on this TV that the voice was activated, so a restart re-enables it. */
+const VOICE_KEY = "painel.voz.ativada";
+
+type VoiceStatus = { tone: "ok" | "warn"; text: string } | null;
 
 export const Route = createFileRoute("/painel")({
   head: () => ({
@@ -34,58 +47,132 @@ export const Route = createFileRoute("/painel")({
 
 function Panel() {
   const { data: config } = useSuspenseQuery(configQuery);
-  const { data: calls } = useSuspenseQuery(recentCallsQuery(CALLS_LIMIT));
+  const { data: calls, dataUpdatedAt } = useSuspenseQuery(recentCallsQuery(CALLS_LIMIT));
   useConfigRealtime();
   const { settings } = config;
   const [soundOn, setSoundOn] = useState(false);
   const [speechAvailable, setSpeechAvailable] = useState(true);
+  const [restoring, setRestoring] = useState(false);
+  const [voiceStatus, setVoiceStatus] = useState<VoiceStatus>(null);
   const [flashKey, setFlashKey] = useState<string | null>(null);
   const seenCallIdsRef = useRef<Set<string>>(new Set(calls.map((call) => call.id)));
+  const lastUpdateRef = useRef(dataUpdatedAt);
   const settingsRef = useRef(settings);
   settingsRef.current = settings;
   const soundRef = useRef(soundOn);
   soundRef.current = soundOn;
   const announcerRef = useRef<ReturnType<typeof createAnnouncer> | null>(null);
+  const activatingRef = useRef(false);
 
   useRealtimeInvalidate(["calls"], [["calls"]], 8000);
 
+  async function reportVoice(manual: boolean) {
+    const choice = await prepareVoice();
+    if (!choice) {
+      setVoiceStatus({ tone: "warn", text: "Nenhuma voz em português instalada nesta TV. Instale o pacote de voz pt-BR nas configurações da TV." });
+    } else if (!choice.brazilian || !choice.female) {
+      setVoiceStatus({ tone: "warn", text: `Voz em uso: ${choice.voice.name}. Voz feminina pt-BR não encontrada nesta TV.` });
+    } else if (manual) {
+      setVoiceStatus({ tone: "ok", text: `Voz ativada: ${choice.voice.name}` });
+    }
+  }
+
   useEffect(() => {
-    setSpeechAvailable(isSpeechSynthesisSupported());
+    const supported = isSpeechSynthesisSupported();
+    setSpeechAvailable(supported);
     announcerRef.current = createAnnouncer();
+    if (!supported) return;
+    void prepareVoice();
+    // After a TV restart, re-enable voice automatically when the browser allows it.
+    let remembered = false;
+    try {
+      remembered = window.localStorage.getItem(VOICE_KEY) === "1";
+    } catch {
+      /* storage unavailable */
+    }
+    if (!remembered) return;
+    setRestoring(true);
+    let cancelled = false;
+    void tryRestoreAudio().then((ok) => {
+      if (cancelled) return;
+      setRestoring(false);
+      if (ok) {
+        setSoundOn(true);
+        void reportVoice(false);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Announce every call that appears in the refreshed list and was not seen before (oldest first).
+  // Announce each new call once, oldest first; old calls (before activation, or missed while the TV slept) stay silent.
   useEffect(() => {
-    const fresh = calls.filter((call) => call.id && !seenCallIdsRef.current.has(call.id)).reverse();
-    if (!fresh.length) return;
-    fresh.forEach((call) => seenCallIdsRef.current.add(call.id));
-    if (!soundRef.current) return;
+    const gapMs = dataUpdatedAt - lastUpdateRef.current;
+    lastUpdateRef.current = dataUpdatedAt;
+    const fresh = pickCallsToAnnounce(calls, seenCallIdsRef.current, { soundOn: soundRef.current, gapMs });
     fresh.forEach((call: Call) => {
       announcerRef.current?.(async () => {
         setFlashKey(call.id);
         const s = settingsRef.current;
         const volume = Number(s.voice_volume);
         if (s.chime_enabled) await playChime(volume);
-        const text = buildAnnouncement(s.voice_template, call, true);
-        await speak(text, { volume, rate: Number(s.voice_rate) });
+        if (s.voice_enabled) {
+          const text = buildAnnouncement(s.voice_template, call, true);
+          await speak(text, { volume, rate: Number(s.voice_rate) });
+        }
         await new Promise((r) => setTimeout(r, 600));
       });
     });
-  }, [calls]);
+  }, [calls, dataUpdatedAt]);
+
+  useEffect(() => {
+    if (voiceStatus?.tone !== "ok") return;
+    const t = setTimeout(() => setVoiceStatus(null), 10000);
+    return () => clearTimeout(t);
+  }, [voiceStatus]);
 
   const current = calls[0];
   const history = calls.slice(1, 1 + Math.max(1, settings.panel_history_count));
 
   function enableSound() {
+    if (activatingRef.current) return;
+    activatingRef.current = true;
     if (!isSpeechSynthesisSupported()) {
       setSpeechAvailable(false);
       setSoundOn(true);
+      setVoiceStatus({ tone: "warn", text: "Este navegador não suporta voz (SpeechSynthesis). O painel funciona sem anúncios falados." });
       window.alert("Este navegador não oferece suporte à síntese de voz (SpeechSynthesis). O painel continuará funcionando sem anúncios falados.");
       return;
     }
     unlockAudio();
+    try {
+      window.localStorage.setItem(VOICE_KEY, "1");
+    } catch {
+      /* storage unavailable */
+    }
     setSoundOn(true);
+    void reportVoice(true);
+    // Short spoken confirmation so whoever sets up the TV hears that its speakers work.
+    announcerRef.current?.(async () => {
+      const s = settingsRef.current;
+      await speak("Voz ativada.", { volume: Number(s.voice_volume), rate: Number(s.voice_rate) });
+    });
   }
+
+  // TV remotes: any key (OK, Enter, arrows) activates the voice while the prompt is showing.
+  const enableRef = useRef(enableSound);
+  enableRef.current = enableSound;
+  useEffect(() => {
+    if (soundOn) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") return;
+      e.preventDefault();
+      enableRef.current();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [soundOn]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-panel-gradient text-panel-foreground">
@@ -157,8 +244,22 @@ function Panel() {
         </div>
       </footer>
 
-      {!soundOn && (
+      {voiceStatus && (
+        <div
+          role="status"
+          className={`fixed bottom-20 right-6 z-40 max-w-md rounded-2xl border px-5 py-3 text-base shadow-lg ${
+            voiceStatus.tone === "ok"
+              ? "border-panel-border bg-panel-raised text-panel-foreground"
+              : "border-priority bg-panel-raised text-panel-foreground"
+          }`}
+        >
+          {voiceStatus.text}
+        </div>
+      )}
+
+      {!soundOn && !restoring && (
         <button
+          autoFocus
           onClick={enableSound}
           className="fixed inset-0 z-50 grid place-items-center bg-panel/80 backdrop-blur-sm"
         >
@@ -167,7 +268,7 @@ function Panel() {
             <div className="text-3xl font-bold">ATIVAR VOZ</div>
             <div className="text-panel-muted">
               {speechAvailable
-                ? "Toque para liberar os anúncios de senhas pelos alto-falantes da TV."
+                ? "Toque ou pressione OK no controle remoto para liberar os anúncios pelos alto-falantes da TV."
                 : "Este navegador não oferece suporte à síntese de voz. O painel continuará funcionando sem anúncios falados."}
             </div>
           </div>
