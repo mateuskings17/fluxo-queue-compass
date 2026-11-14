@@ -189,7 +189,6 @@
 }
 
 @media print {
-  body * { visibility: hidden; }
-  .print-ticket, .print-ticket * { visibility: visible; }
-  .print-ticket { position: fixed; inset: 0; display: flex !important; align-items: flex-start; justify-content: center; padding-top: 0; background: white; color: black; }
+  body > *:not(.print-ticket) { display: none !important; }
+  .print-ticket { position: static; display: flex !important; align-items: flex-start; justify-content: center; padding-top: 0; background: white; color: black; }
 }

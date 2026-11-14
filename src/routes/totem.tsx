@@ -1,3 +1,4 @@
+import { createPortal } from "react-dom";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -136,6 +137,7 @@ function Totem() {
               </Button>
             </div>
           </div>
+          {typeof document !== "undefined" && createPortal(
           <div className="print-ticket hidden">
             <div style={{ width: "72mm", height: "50mm", boxSizing: "border-box", paddingTop: "3mm", overflow: "hidden", textAlign: "center", fontFamily: "sans-serif" }}>
               <div style={{ fontSize: "11pt", fontWeight: 700, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings.unit_name}</div>
@@ -147,7 +149,9 @@ function Totem() {
               </div>
               <div style={{ fontSize: "8pt", marginTop: "1mm" }}>Aguarde a chamada no painel</div>
             </div>
-          </div>
+          </div>,
+          document.body,
+          )}
         </div>
       )}
     </div>
