@@ -137,15 +137,15 @@ function Totem() {
             </div>
           </div>
           <div className="print-ticket hidden">
-            <div style={{ width: "72mm", textAlign: "center", fontFamily: "sans-serif" }}>
-              <div style={{ fontSize: "14pt", fontWeight: 700 }}>{settings.unit_name}</div>
-              <div style={{ fontSize: "10pt", marginTop: "4mm" }}>SENHA</div>
-              <div style={{ fontSize: "44pt", fontWeight: 800, lineHeight: 1 }}>{issued.code}</div>
-              <div style={{ fontSize: "12pt", marginTop: "2mm" }}>{issued.type_name}</div>
-              <div style={{ fontSize: "9pt", marginTop: "3mm" }}>
+            <div style={{ width: "72mm", height: "50mm", boxSizing: "border-box", paddingTop: "3mm", overflow: "hidden", textAlign: "center", fontFamily: "sans-serif" }}>
+              <div style={{ fontSize: "11pt", fontWeight: 700, lineHeight: 1.15, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{settings.unit_name}</div>
+              <div style={{ fontSize: "8pt", marginTop: "2mm" }}>SENHA</div>
+              <div style={{ fontSize: "36pt", fontWeight: 800, lineHeight: 1 }}>{issued.code}</div>
+              <div style={{ fontSize: "10pt", marginTop: "1.5mm", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{issued.type_name}</div>
+              <div style={{ fontSize: "8pt", marginTop: "1.5mm" }}>
                 {new Date(issued.created_at).toLocaleString("pt-BR")}
               </div>
-              <div style={{ fontSize: "9pt", marginTop: "3mm" }}>Aguarde a chamada no painel</div>
+              <div style={{ fontSize: "8pt", marginTop: "1mm" }}>Aguarde a chamada no painel</div>
             </div>
           </div>
         </div>
