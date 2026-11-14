@@ -1,7 +1,8 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, notFound } from "@tanstack/react-router";
+import { z } from "zod";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Maximize, Volume2 } from "lucide-react";
+import { ArrowLeft, Maximize, Volume2, Monitor } from "lucide-react";
 import { buildAnnouncement, configQuery, recentCallsQuery, formatTime, type Call } from "@/lib/queue";
 import {
   createAnnouncer,
@@ -13,6 +14,7 @@ import {
   unlockAudio,
 } from "@/lib/voice";
 import { pickCallsToAnnounce } from "@/lib/announce";
+import { callsForSector } from "@/lib/panel-calls";
 import { useConfigRealtime, useRealtimeInvalidate } from "@/hooks/use-realtime";
 import { UnitLogo } from "@/components/queue/Brand";
 import { Clock } from "@/components/queue/Clock";
@@ -26,28 +28,58 @@ const VOICE_KEY = "painel.voz.ativada";
 type VoiceStatus = { tone: "ok" | "warn"; text: string } | null;
 
 export const Route = createFileRoute("/painel")({
+  validateSearch: z.object({ setor: z.string().uuid().optional() }),
+  loaderDeps: ({ search }) => ({ sectorId: search.setor }),
   head: () => ({
     meta: [
-      { title: "Painel de chamadas" },
+      { title: "Painéis por setor — Gestão de Filas" },
       { name: "description", content: "Painel público com as senhas chamadas e o local de atendimento." },
-      { property: "og:title", content: "Painel de chamadas" },
+      { property: "og:title", content: "Painéis por setor — Gestão de Filas" },
       { property: "og:description", content: "Painel público com as senhas chamadas e o local de atendimento." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
-  loader: async ({ context }) => {
-    await Promise.all([
-      context.queryClient.ensureQueryData(configQuery),
-      context.queryClient.ensureQueryData(recentCallsQuery(CALLS_LIMIT)),
-    ]);
+  loader: async ({ context, deps }) => {
+    const config = await context.queryClient.ensureQueryData(configQuery);
+    const sector = config.sectors.find((s) => s.id === deps.sectorId && s.active);
+    if (deps.sectorId && !sector) throw notFound();
+    if (sector) await context.queryClient.ensureQueryData(recentCallsQuery(CALLS_LIMIT, sector.id));
+    return { sectorName: sector?.name };
   },
-  component: Panel,
+  component: PanelEntry,
   errorComponent: RouteError,
   notFoundComponent: RouteNotFound,
 });
 
-function Panel() {
+function PanelEntry() {
+  const { setor } = Route.useSearch();
   const { data: config } = useSuspenseQuery(configQuery);
-  const { data: calls, dataUpdatedAt } = useSuspenseQuery(recentCallsQuery(CALLS_LIMIT));
+  useConfigRealtime();
+  if (setor) return <Panel key={setor} sectorId={setor} />;
+  return (
+    <div className="min-h-screen bg-hero px-5 py-10">
+      <div className="mx-auto max-w-5xl">
+        <Button variant="ghost" asChild><Link to="/"><ArrowLeft /> Menu</Link></Button>
+        <h1 className="mt-6 text-3xl font-bold">Painéis por setor</h1>
+        <div className="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {config.sectors.filter((s) => s.active).map((s) => (
+            <Button key={s.id} variant="outline" asChild className="h-auto justify-start gap-3 whitespace-normal p-6 text-left text-lg">
+              <Link to="/painel" search={{ setor: s.id }}><Monitor className="shrink-0" />{s.name}</Link>
+            </Button>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Panel({ sectorId }: { sectorId: string }) {
+  const { data: config } = useSuspenseQuery(configQuery);
+  const { data: fetchedCalls, dataUpdatedAt } = useSuspenseQuery(recentCallsQuery(CALLS_LIMIT, sectorId));
+  const calls = callsForSector(fetchedCalls, sectorId);
+  const sector = config.sectors.find((s) => s.id === sectorId);
+  const voiceKey = `${VOICE_KEY}:${sectorId}`;
   useConfigRealtime();
   const { settings } = config;
   const [soundOn, setSoundOn] = useState(false);
@@ -63,6 +95,16 @@ function Panel() {
   soundRef.current = soundOn;
   const announcerRef = useRef<ReturnType<typeof createAnnouncer> | null>(null);
   const activatingRef = useRef(false);
+  const activePanelRef = useRef(true);
+
+  useEffect(() => {
+    activePanelRef.current = true;
+    return () => {
+      activePanelRef.current = false;
+      announcerRef.current = null;
+      if (isSpeechSynthesisSupported()) window.speechSynthesis.cancel();
+    };
+  }, []);
 
   useRealtimeInvalidate(["calls"], [["calls"]], 8000);
 
@@ -84,7 +126,7 @@ function Panel() {
     // After a TV restart, re-enable voice automatically when the browser allows it.
     let remembered = false;
     try {
-      remembered = window.localStorage.getItem(VOICE_KEY) === "1";
+      remembered = window.localStorage.getItem(voiceKey) === "1";
     } catch {
       /* storage unavailable */
     }
@@ -111,11 +153,12 @@ function Panel() {
     const fresh = pickCallsToAnnounce(calls, seenCallIdsRef.current, { soundOn: soundRef.current, gapMs });
     fresh.forEach((call: Call) => {
       announcerRef.current?.(async () => {
+        if (!activePanelRef.current) return;
         setFlashKey(call.id);
         const s = settingsRef.current;
         const volume = Number(s.voice_volume);
         if (s.chime_enabled) await playChime(volume);
-        if (s.voice_enabled) {
+        if (s.voice_enabled && activePanelRef.current) {
           const text = buildAnnouncement(s.voice_template, call, true);
           await speak(text, { volume, rate: Number(s.voice_rate) });
         }
@@ -191,7 +234,7 @@ function Panel() {
     }
     unlockAudio();
     try {
-      window.localStorage.setItem(VOICE_KEY, "1");
+      window.localStorage.setItem(voiceKey, "1");
     } catch {
       /* storage unavailable */
     }
@@ -199,6 +242,7 @@ function Panel() {
     void reportVoice(true);
     // Short spoken confirmation so whoever sets up the TV hears that its speakers work.
     announcerRef.current?.(async () => {
+      if (!activePanelRef.current) return;
       const s = settingsRef.current;
       await speak("Voz ativada.", { volume: Number(s.voice_volume), rate: Number(s.voice_rate) });
     });
@@ -224,7 +268,7 @@ function Panel() {
         <UnitLogo settings={settings} className="h-12 w-12" />
         <div>
           <div className="text-2xl font-bold">{settings.unit_name}</div>
-          <div className="text-sm uppercase tracking-[0.2em] text-panel-muted">{settings.panel_title}</div>
+          <div className="text-sm uppercase tracking-[0.2em] text-panel-muted">{settings.panel_title} · {sector?.name}</div>
         </div>
         <div className="ml-auto flex items-center gap-4">
           <Clock withDate className="text-3xl font-bold tabular-nums" />

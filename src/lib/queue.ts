@@ -48,10 +48,10 @@ export const sectorTodayQuery = (sectorId: string) =>
     },
   });
 
-export const recentCallsQuery = (limit = 12) =>
+export const recentCallsQuery = (limit = 12, sectorId?: string) =>
   queryOptions({
-    queryKey: ["calls", limit],
-    queryFn: (): Promise<Call[]> => getRecentCallsFn({ data: { limit } }),
+    queryKey: ["calls", sectorId ?? "all", limit],
+    queryFn: (): Promise<Call[]> => getRecentCallsFn({ data: { limit, sectorId } }),
   });
 
 export const ticketDetailQuery = (ticketId: string) =>

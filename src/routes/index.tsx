@@ -13,6 +13,8 @@ export const Route = createFileRoute("/")({
       { name: "description", content: "Acesse o totem, o painel público, a recepção, os setores de exames, a administração e os relatórios." },
       { property: "og:title", content: "Menu — Gestão de Filas e Senhas" },
       { property: "og:description", content: "Acesse o totem, o painel público, os setores de atendimento e a administração." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(configQuery),
@@ -49,7 +51,7 @@ function Index() {
 
         <section className="mt-10 grid gap-4 md:grid-cols-2">
           <BigTile to="/totem" icon={Ticket} title="Totem de emissão de senha" text="Tela para o paciente retirar a senha" tone="primary" />
-          <BigTile to="/painel" icon={Monitor} title="Painel público" text="Exibe e anuncia por voz as chamadas" tone="panel" />
+          <BigTile to="/painel" icon={Monitor} title="Painéis por setor" text="Mamografia, Tomografia, Recepção, Ultrassom e Endoscopia" tone="panel" />
         </section>
 
         <h2 className="mt-12 text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">Atendimento</h2>

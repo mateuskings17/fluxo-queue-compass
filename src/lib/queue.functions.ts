@@ -80,10 +80,12 @@ export const getSectorTodayFn = createServerFn({ method: "GET" })
   });
 
 export const getRecentCallsFn = createServerFn({ method: "GET" })
-  .validator(z.object({ limit: z.number().int().min(1).max(50) }))
+  .validator(z.object({ limit: z.number().int().min(1).max(50), sectorId: id.optional() }))
   .handler(async ({ data }) => {
     const sb = await db();
-    const res = await sb.from("calls").select("*").order("created_at", { ascending: false }).limit(data.limit);
+    let query = sb.from("calls").select("*");
+    if (data.sectorId) query = query.eq("sector_id", data.sectorId);
+    const res = await query.order("created_at", { ascending: false }).limit(data.limit);
     return check(res) ?? [];
   });
 

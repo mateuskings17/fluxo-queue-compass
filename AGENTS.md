@@ -33,3 +33,4 @@ use the editor.
 
 - Queue data (tickets, steps, calls, events, settings, routing rules, ticket-type writes) is read and written only through validated server functions in `src/lib/queue.functions.ts`; the browser has no direct table or database-function access, because the app has no login and those functions are its only gate.
 - Live screen updates use a data-free database broadcast on the `queue-updates` topic (see `src/hooks/use-realtime.ts`), followed by a re-fetch through server functions, because browsers can no longer read queue tables directly.
+- Public panels use a validated sector search parameter and sector-keyed call queries, filtered on the server and again before display/announcements, so screens cannot mix sector calls; changing sector remounts the audio and seen-call state.
