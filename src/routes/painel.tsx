@@ -70,9 +70,7 @@ function Panel() {
     const choice = await prepareVoice();
     if (!choice) {
       setVoiceStatus({ tone: "warn", text: "Nenhuma voz em português instalada nesta TV. Instale o pacote de voz pt-BR nas configurações da TV." });
-    } else if (!choice.brazilian || !choice.female) {
-      setVoiceStatus({ tone: "warn", text: `Voz em uso: ${choice.voice.name}. Voz feminina pt-BR não encontrada nesta TV.` });
-    } else if (manual) {
+    } else if (manual && choice.brazilian && choice.female) {
       setVoiceStatus({ tone: "ok", text: `Voz ativada: ${choice.voice.name}` });
     }
   }
