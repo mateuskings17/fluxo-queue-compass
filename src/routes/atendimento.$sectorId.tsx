@@ -28,6 +28,8 @@ export const Route = createFileRoute("/atendimento/$sectorId")({
       { name: "description", content: "Chame, atenda e encaminhe as senhas do seu setor." },
       { property: "og:title", content: "Atendimento — Gestão de Filas" },
       { property: "og:description", content: "Chame, atenda e encaminhe as senhas do seu setor." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   loader: async ({ context, params }) => {
@@ -199,6 +201,14 @@ function Workspace({ config, sector, station, attendant, typeFilter, setTypeFilt
     setTypeFilter(typeFilter.includes(id) ? typeFilter.filter((x) => x !== id) : [...typeFilter, id]);
   }
 
+  function handleCancel(step: StepWithTicket) {
+    const ticket = step.ticket;
+    if (!ticket || busy) return;
+    if (window.confirm(`Cancelar o atendimento da senha ${ticket.code}? A senha será retirada das filas e suas etapas pendentes serão canceladas.`)) {
+      void run(() => cancelTicket(ticket.id, "cancelada no atendimento"), "Senha cancelada");
+    }
+  }
+
   return (
     <div className="mx-auto grid max-w-[1500px] gap-6 px-4 py-6 md:px-6 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1fr)]">
       <div className="space-y-6">
@@ -227,11 +237,7 @@ function Workspace({ config, sector, station, attendant, typeFilter, setTypeFilt
             onFinish={() => run(() => finishStep(current.id, [], attendant), "Etapa concluída")}
             onForward={() => setForwardOpen(true)}
             onNoShow={() => run(() => markNoShow(current.id, attendant), "Marcado como ausente")}
-            onCancel={() => {
-              if (current.ticket && window.confirm(`Cancelar a senha ${current.ticket.code}?`)) {
-                void run(() => cancelTicket(current.ticket!.id, "cancelada no atendimento"), "Senha cancelada");
-              }
-            }}
+            onCancel={() => handleCancel(current)}
             onHistory={() => current.ticket && setHistoryId(current.ticket.id)}
           />
         ) : (
@@ -281,7 +287,7 @@ function Workspace({ config, sector, station, attendant, typeFilter, setTypeFilt
           </div>
           <ul className="max-h-[60vh] divide-y overflow-y-auto">
             {waiting.map((s, i) => (
-              <li key={s.id} className={cn("flex items-center gap-3 px-5 py-3", i === 0 && "bg-primary-soft/40")}>
+              <li key={s.id} className={cn("flex flex-wrap items-center gap-3 px-5 py-3", i === 0 && "bg-primary-soft/40")}>
                 <span className="w-6 text-right text-sm font-semibold text-muted-foreground">{i + 1}</span>
                 <span className="ticket-code w-24 text-3xl">{s.ticket?.code}</span>
                 <div className="min-w-0 flex-1">
@@ -294,12 +300,17 @@ function Workspace({ config, sector, station, attendant, typeFilter, setTypeFilt
                     chegou {formatTime(s.queued_at)} · espera {now ? formatMinutes((now - new Date(s.queued_at ?? s.created_at).getTime()) / 60000) : "—"}
                   </div>
                 </div>
-                <Button size="icon" variant="ghost" title="Histórico" onClick={() => s.ticket && setHistoryId(s.ticket.id)}>
-                  <History />
-                </Button>
-                <Button size="sm" variant="outline" disabled={busy || !!current} onClick={() => run(() => callStep(s.id, station.id, attendant))}>
-                  <Bell /> Chamar
-                </Button>
+                <div className="ml-auto flex shrink-0 items-center gap-2">
+                  <Button size="icon" variant="ghost" title="Histórico" onClick={() => s.ticket && setHistoryId(s.ticket.id)}>
+                    <History />
+                  </Button>
+                  <Button size="sm" variant="outline" disabled={busy || !!current} onClick={() => run(() => callStep(s.id, station.id, attendant))}>
+                    <Bell /> Chamar
+                  </Button>
+                  <Button size="sm" variant="outline" className="text-destructive hover:text-destructive" disabled={busy || !s.ticket} onClick={() => handleCancel(s)}>
+                    <X /> Cancelar
+                  </Button>
+                </div>
               </li>
             ))}
             {waiting.length === 0 && <li className="px-5 py-10 text-center text-sm text-muted-foreground">Nenhuma senha aguardando.</li>}
