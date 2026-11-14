@@ -28,3 +28,8 @@ use the editor.
   own key and store it in Secrets.
 - **Secrets.** Lovable manages them. Do not put secret values in the repo.
 <!-- LOVABLE:END -->
+
+## Project rules
+
+- Queue data (tickets, steps, calls, events, settings, routing rules, ticket-type writes) is read and written only through validated server functions in `src/lib/queue.functions.ts`; the browser has no direct table or database-function access, because the app has no login and those functions are its only gate.
+- Live screen updates use a data-free database broadcast on the `queue-updates` topic (see `src/hooks/use-realtime.ts`), followed by a re-fetch through server functions, because browsers can no longer read queue tables directly.

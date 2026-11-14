@@ -7,10 +7,11 @@ import { cn } from "@/lib/utils";
 export function useConfigMutation() {
   const qc = useQueryClient();
   const [saving, setSaving] = useState(false);
-  async function mutate(fn: () => PromiseLike<{ error: { message: string } | null }>, ok = "Salvo") {
+  async function mutate(fn: () => PromiseLike<unknown>, ok = "Salvo") {
     setSaving(true);
     try {
-      const { error } = await fn();
+      const res = await fn();
+      const error = (res as { error?: { message: string } | null } | null | undefined)?.error;
       if (error) throw new Error(error.message);
       await qc.invalidateQueries({ queryKey: ["config"] });
       if (ok) toast.success(ok);

@@ -3,6 +3,10 @@ import { Plus, RotateCcw, Trash2, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  closeOpenTicketsFn, createRoutingRuleFn, createTicketTypeFn, deleteRoutingRuleFn, deleteTicketTypeFn,
+  resetTicketNumberingFn, updateRoutingRuleFn, updateTicketTypeFn,
+} from "@/lib/queue.functions";
 import { CALL_MODE_LABEL, nextTicketCode, todayISO, type AppConfig, type RoutingRule, type Sector, type Station, type TicketType } from "@/lib/queue";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -131,7 +135,7 @@ export function TicketTypesAdmin({ config }: { config: AppConfig }) {
       title="Tipos de senha e numeração"
       description="Defina o formato de cada senha: prefixo + número com zeros à esquerda. Exemplos: 001, A001, RX001, COL001."
       actions={
-        <Button disabled={saving} onClick={() => mutate(() => supabase.from("ticket_types").insert({ name: "Novo tipo", prefix: "N", sort_order: config.ticketTypes.length + 1 }), "Tipo criado")}>
+        <Button disabled={saving} onClick={() => mutate(() => createTicketTypeFn({ data: { sort_order: config.ticketTypes.length + 1 } }), "Tipo criado")}>
           <Plus /> Novo tipo
         </Button>
       }
@@ -182,13 +186,13 @@ function TicketTypeRow({ type, sectors, today }: { type: TicketType; sectors: Se
             size="sm"
             onClick={() =>
               window.confirm(`Reiniciar a numeração de "${type.name}"? A próxima senha será ${f.prefix}${String(f.start_number).padStart(f.digits, "0")}.`) &&
-              mutate(() => supabase.from("ticket_types").update({ current_number: Math.max(0, type.start_number - 1), last_reset_date: today }).eq("id", type.id), "Numeração reiniciada")
+              mutate(() => resetTicketNumberingFn({ data: { id: type.id, today } }), "Numeração reiniciada")
             }
           >
             <RotateCcw /> Zerar numeração
           </Button>
-          <Button size="sm" disabled={saving} onClick={() => mutate(() => supabase.from("ticket_types").update({ ...f, target_sector_id: f.target_sector_id || null }).eq("id", type.id))}>Salvar</Button>
-          <Button variant="ghost" size="icon" onClick={() => window.confirm(`Excluir o tipo ${type.name}?`) && mutate(() => supabase.from("ticket_types").delete().eq("id", type.id), "Excluído")}>
+          <Button size="sm" disabled={saving} onClick={() => mutate(() => updateTicketTypeFn({ data: { id: type.id, values: { ...f, target_sector_id: f.target_sector_id || null } } }))}>Salvar</Button>
+          <Button variant="ghost" size="icon" onClick={() => window.confirm(`Excluir o tipo ${type.name}?`) && mutate(() => deleteTicketTypeFn({ data: { id: type.id } }), "Excluído")}>
             <Trash2 />
           </Button>
         </div>
@@ -207,7 +211,7 @@ export function RoutingAdmin({ config }: { config: AppConfig }) {
         title="Rotas de encaminhamento"
         description="Rotas prontas aparecem como atalhos na hora de encaminhar o paciente. A ordem dos setores define a sequência das filas."
         actions={
-          <Button disabled={saving} onClick={() => mutate(() => supabase.from("routing_rules").insert({ name: "Nova rota", sector_ids: [], sort_order: config.routingRules.length + 1 }), "Rota criada")}>
+          <Button disabled={saving} onClick={() => mutate(() => createRoutingRuleFn({ data: { sort_order: config.routingRules.length + 1 } }), "Rota criada")}>
             <Plus /> Nova rota
           </Button>
         }
@@ -233,8 +237,8 @@ function RuleRow({ rule, sectors }: { rule: RoutingRule; sectors: Sector[] }) {
       <div className="flex flex-wrap items-end gap-3">
         <Field label="Nome da rota" className="min-w-56 flex-1"><Input value={name} onChange={(e) => setName(e.target.value)} /></Field>
         <label className="flex h-9 items-center gap-2 text-sm font-medium"><Switch checked={active} onCheckedChange={setActive} /> Ativa</label>
-        <Button disabled={saving} onClick={() => mutate(() => supabase.from("routing_rules").update({ name, sector_ids: ids, active }).eq("id", rule.id))}>Salvar</Button>
-        <Button variant="ghost" size="icon" onClick={() => window.confirm(`Excluir a rota ${rule.name}?`) && mutate(() => supabase.from("routing_rules").delete().eq("id", rule.id), "Excluída")}>
+        <Button disabled={saving} onClick={() => mutate(() => updateRoutingRuleFn({ data: { id: rule.id, name, sector_ids: ids, active } }))}>Salvar</Button>
+        <Button variant="ghost" size="icon" onClick={() => window.confirm(`Excluir a rota ${rule.name}?`) && mutate(() => deleteRoutingRuleFn({ data: { id: rule.id } }), "Excluída")}>
           <Trash2 />
         </Button>
       </div>
@@ -297,12 +301,13 @@ export function QueuesAdmin({ config }: { config: AppConfig }) {
           variant="destructive"
           onClick={async () => {
             if (!window.confirm("Encerrar todas as senhas em aberto?")) return;
-            const { data, error } = await supabase.rpc("close_open_tickets");
-            if (error) {
-              toast.error(error.message);
+            try {
+              const count = await closeOpenTicketsFn();
+              toast.success(`${count} senha(s) encerrada(s)`);
+            } catch (e) {
+              toast.error(e instanceof Error ? e.message : "Erro ao encerrar");
               return;
             }
-            toast.success(`${data ?? 0} senha(s) encerrada(s)`);
             void qc.invalidateQueries({ queryKey: ["queue"] });
           }}
         >

@@ -3,7 +3,7 @@ import { keepPreviousData, useQuery, useSuspenseQuery } from "@tanstack/react-qu
 import { useEffect, useMemo, useState } from "react";
 import { Download, History, Search, Save, Trash2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { supabase } from "@/integrations/supabase/client";
+import { getReportRangeFn } from "@/lib/queue.functions";
 import { configQuery, formatMinutes, minutesBetween, TICKET_STATUS_LABEL, todayISO, type Ticket, type TicketStep } from "@/lib/queue";
 import { PageHeader } from "@/components/queue/PageHeader";
 import { RouteError, RouteNotFound } from "@/components/queue/RouteError";
@@ -62,21 +62,7 @@ function loadSavedReports(): SavedReport[] {
 async function fetchRange(from: string, to: string): Promise<TicketWithSteps[]> {
   const start = new Date(`${from}T00:00:00`);
   const end = new Date(`${to}T23:59:59.999`);
-  const pageSize = 1000;
-  const out: TicketWithSteps[] = [];
-  for (let page = 0; page < 50; page++) {
-    const { data, error } = await supabase
-      .from("tickets")
-      .select("*, steps:ticket_steps(*)")
-      .gte("created_at", start.toISOString())
-      .lte("created_at", end.toISOString())
-      .order("created_at", { ascending: true })
-      .range(page * pageSize, page * pageSize + pageSize - 1);
-    if (error) throw new Error(error.message);
-    out.push(...((data ?? []) as TicketWithSteps[]));
-    if (!data || data.length < pageSize) break;
-  }
-  return out;
+  return (await getReportRangeFn({ data: { start: start.toISOString(), end: end.toISOString() } })) as TicketWithSteps[];
 }
 
 function avg(values: (number | null)[]) {

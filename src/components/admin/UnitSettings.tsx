@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { ImageUp, Trash2, Volume2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { updateSettingsFn } from "@/lib/queue.functions";
 import { buildAnnouncement, type Settings } from "@/lib/queue";
 import { playChime, speak, unlockAudio } from "@/lib/voice";
 import { Button } from "@/components/ui/button";
@@ -42,7 +42,7 @@ export function UnitSettings({ settings }: { settings: Settings }) {
   async function onLogo(file?: File) {
     if (!file) return;
     const dataUrl = await resizeImage(file);
-    await mutate(() => supabase.from("settings").update({ logo_url: dataUrl, updated_at: new Date().toISOString() }).eq("id", 1), "Logotipo atualizado");
+    await mutate(() => updateSettingsFn({ data: { logo_url: dataUrl } }), "Logotipo atualizado");
   }
 
   return (
@@ -60,7 +60,7 @@ export function UnitSettings({ settings }: { settings: Settings }) {
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => onLogo(e.target.files?.[0])} />
               </label>
               {settings.logo_url && (
-                <Button variant="ghost" size="sm" onClick={() => mutate(() => supabase.from("settings").update({ logo_url: null }).eq("id", 1), "Logotipo removido")}>
+                <Button variant="ghost" size="sm" onClick={() => mutate(() => updateSettingsFn({ data: { logo_url: null } }), "Logotipo removido")}>
                   <Trash2 /> Remover
                 </Button>
               )}
@@ -73,7 +73,7 @@ export function UnitSettings({ settings }: { settings: Settings }) {
             <Input value={form.totem_message} onChange={(e) => setForm({ ...form, totem_message: e.target.value })} />
           </Field>
         </div>
-        <Button className="mt-6" disabled={saving} onClick={() => mutate(() => supabase.from("settings").update({ ...form, updated_at: new Date().toISOString() }).eq("id", 1))}>
+        <Button className="mt-6" disabled={saving} onClick={() => mutate(() => updateSettingsFn({ data: form }))}>
           Salvar
         </Button>
       </Section>
@@ -150,7 +150,7 @@ export function PanelVoiceSettings({ settings }: { settings: Settings }) {
       </Section>
 
       <div className="flex gap-2">
-        <Button disabled={saving} onClick={() => mutate(() => supabase.from("settings").update({ ...form, updated_at: new Date().toISOString() }).eq("id", 1))}>
+        <Button disabled={saving} onClick={() => mutate(() => updateSettingsFn({ data: form }))}>
           Salvar
         </Button>
         <Button variant="outline" onClick={test}>

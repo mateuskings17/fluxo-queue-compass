@@ -1,11 +1,10 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Maximize, Volume2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
 import { buildAnnouncement, configQuery, recentCallsQuery, formatTime, type Call } from "@/lib/queue";
 import { createAnnouncer, isSpeechSynthesisSupported, playChime, speak, unlockAudio } from "@/lib/voice";
-import { useConfigRealtime } from "@/hooks/use-realtime";
+import { useConfigRealtime, useRealtimeInvalidate } from "@/hooks/use-realtime";
 import { UnitLogo } from "@/components/queue/Brand";
 import { Clock } from "@/components/queue/Clock";
 import { Button } from "@/components/ui/button";
@@ -37,7 +36,6 @@ function Panel() {
   const { data: config } = useSuspenseQuery(configQuery);
   const { data: calls } = useSuspenseQuery(recentCallsQuery(CALLS_LIMIT));
   useConfigRealtime();
-  const qc = useQueryClient();
   const { settings } = config;
   const [soundOn, setSoundOn] = useState(false);
   const [speechAvailable, setSpeechAvailable] = useState(true);
@@ -49,34 +47,31 @@ function Panel() {
   soundRef.current = soundOn;
   const announcerRef = useRef<ReturnType<typeof createAnnouncer> | null>(null);
 
+  useRealtimeInvalidate(["calls"], [["calls"]], 8000);
+
   useEffect(() => {
     setSpeechAvailable(isSpeechSynthesisSupported());
     announcerRef.current = createAnnouncer();
-    const channel = supabase
-      .channel(`panel-calls-${Math.random().toString(36).slice(2)}`)
-      .on("postgres_changes", { event: "INSERT", schema: "public", table: "calls" }, (payload) => {
-        const call = payload.new as Call;
-        if (!call.id || seenCallIdsRef.current.has(call.id)) return;
-        seenCallIdsRef.current.add(call.id);
-        void qc.invalidateQueries({ queryKey: ["calls"] });
-        if (!soundRef.current) return;
-        announcerRef.current?.(async () => {
-          setFlashKey(call.id);
-          const s = settingsRef.current;
-          const volume = Number(s.voice_volume);
-          if (s.chime_enabled) await playChime(volume);
-          const text = buildAnnouncement(s.voice_template, call, true);
-          await speak(text, { volume, rate: Number(s.voice_rate) });
-          await new Promise((r) => setTimeout(r, 600));
-        });
-      })
-      .subscribe();
-    const interval = setInterval(() => void qc.invalidateQueries({ queryKey: ["calls"] }), 30000);
-    return () => {
-      clearInterval(interval);
-      void supabase.removeChannel(channel);
-    };
-  }, [qc]);
+  }, []);
+
+  // Announce every call that appears in the refreshed list and was not seen before (oldest first).
+  useEffect(() => {
+    const fresh = calls.filter((call) => call.id && !seenCallIdsRef.current.has(call.id)).reverse();
+    if (!fresh.length) return;
+    fresh.forEach((call) => seenCallIdsRef.current.add(call.id));
+    if (!soundRef.current) return;
+    fresh.forEach((call: Call) => {
+      announcerRef.current?.(async () => {
+        setFlashKey(call.id);
+        const s = settingsRef.current;
+        const volume = Number(s.voice_volume);
+        if (s.chime_enabled) await playChime(volume);
+        const text = buildAnnouncement(s.voice_template, call, true);
+        await speak(text, { volume, rate: Number(s.voice_rate) });
+        await new Promise((r) => setTimeout(r, 600));
+      });
+    });
+  }, [calls]);
 
   const current = calls[0];
   const history = calls.slice(1, 1 + Math.max(1, settings.panel_history_count));

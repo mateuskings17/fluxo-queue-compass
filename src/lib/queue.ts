@@ -1,5 +1,8 @@
 import { queryOptions } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  callNextFn, callStepFn, cancelTicketFn, finishStepFn, getConfigFn, getRecentCallsFn, getSectorQueueFn, getSectorTodayFn,
+  getTicketDetailFn, issueTicketFn, markNoShowFn, requeueStepFn, setPatientNameFn, startStepFn,
+} from "./queue.functions";
 import type { Tables } from "@/integrations/supabase/types";
 
 export type Settings = Tables<"settings">;
@@ -21,29 +24,9 @@ export type AppConfig = {
   routingRules: RoutingRule[];
 };
 
-function unwrap<T>(res: { data: T | null; error: { message: string } | null }): T {
-  if (res.error) throw new Error(res.error.message);
-  return res.data as T;
-}
-
 export const configQuery = queryOptions({
   queryKey: ["config"],
-  queryFn: async (): Promise<AppConfig> => {
-    const [settings, sectors, stations, ticketTypes, routingRules] = await Promise.all([
-      supabase.from("settings").select("*").eq("id", 1).single(),
-      supabase.from("sectors").select("*").order("sort_order").order("name"),
-      supabase.from("stations").select("*").order("sort_order").order("name"),
-      supabase.from("ticket_types").select("*").order("sort_order").order("name"),
-      supabase.from("routing_rules").select("*").order("sort_order").order("name"),
-    ]);
-    return {
-      settings: unwrap(settings),
-      sectors: unwrap(sectors) ?? [],
-      stations: unwrap(stations) ?? [],
-      ticketTypes: unwrap(ticketTypes) ?? [],
-      routingRules: unwrap(routingRules) ?? [],
-    };
-  },
+  queryFn: (): Promise<AppConfig> => getConfigFn(),
 });
 
 export const ACTIVE_STEP_STATUSES = ["waiting", "called", "in_service"] as const;
@@ -51,120 +34,68 @@ export const ACTIVE_STEP_STATUSES = ["waiting", "called", "in_service"] as const
 export const sectorQueueQuery = (sectorId: string) =>
   queryOptions({
     queryKey: ["queue", sectorId],
-    queryFn: async (): Promise<StepWithTicket[]> => {
-      const res = await supabase
-        .from("ticket_steps")
-        .select("*, ticket:tickets(*)")
-        .eq("sector_id", sectorId)
-        .in("status", [...ACTIVE_STEP_STATUSES])
-        .order("queued_at", { ascending: true });
-      return (unwrap(res) ?? []) as StepWithTicket[];
-    },
+    queryFn: (): Promise<StepWithTicket[]> => getSectorQueueFn({ data: { sectorId } }),
   });
 
 /** Steps of this sector that ended today (for the "absent" list and counters). */
 export const sectorTodayQuery = (sectorId: string) =>
   queryOptions({
     queryKey: ["queue", sectorId, "today"],
-    queryFn: async (): Promise<StepWithTicket[]> => {
+    queryFn: (): Promise<StepWithTicket[]> => {
       const since = new Date();
       since.setHours(0, 0, 0, 0);
-      const res = await supabase
-        .from("ticket_steps")
-        .select("*, ticket:tickets(*)")
-        .eq("sector_id", sectorId)
-        .in("status", ["done", "no_show"])
-        .gte("finished_at", since.toISOString())
-        .order("finished_at", { ascending: false })
-        .limit(500);
-      return (unwrap(res) ?? []) as StepWithTicket[];
+      return getSectorTodayFn({ data: { sectorId, since: since.toISOString() } });
     },
   });
 
 export const recentCallsQuery = (limit = 12) =>
   queryOptions({
     queryKey: ["calls", limit],
-    queryFn: async (): Promise<Call[]> => {
-      const res = await supabase
-        .from("calls")
-        .select("*")
-        .order("created_at", { ascending: false })
-        .limit(limit);
-      return unwrap(res) ?? [];
-    },
+    queryFn: (): Promise<Call[]> => getRecentCallsFn({ data: { limit } }),
   });
 
 export const ticketDetailQuery = (ticketId: string) =>
   queryOptions({
     queryKey: ["ticket", ticketId],
-    queryFn: async () => {
-      const [ticket, steps, events] = await Promise.all([
-        supabase.from("tickets").select("*").eq("id", ticketId).single(),
-        supabase.from("ticket_steps").select("*").eq("ticket_id", ticketId).order("seq"),
-        supabase.from("ticket_events").select("*").eq("ticket_id", ticketId).order("created_at"),
-      ]);
-      return {
-        ticket: unwrap(ticket) as Ticket,
-        steps: (unwrap(steps) ?? []) as TicketStep[],
-        events: (unwrap(events) ?? []) as TicketEvent[],
-      };
-    },
+    queryFn: (): Promise<{ ticket: Ticket; steps: TicketStep[]; events: TicketEvent[] }> => getTicketDetailFn({ data: { ticketId } }),
   });
 
-/* ---------- Actions (all run as database functions so numbering and queues stay consistent) ---------- */
+/* ---------- Actions (validated on the server; numbering and queues run as database functions) ---------- */
 
 export async function issueTicket(typeId: string, patientName?: string) {
-  return unwrap(
-    await supabase.rpc("issue_ticket", { p_type_id: typeId, ...(patientName ? { p_patient_name: patientName } : {}) }),
-  ) as Ticket;
+  return (await issueTicketFn({ data: { typeId, ...(patientName ? { patientName } : {}) } })) as Ticket;
 }
 
 export async function callNext(sectorId: string, stationId: string, attendant: string, typeIds: string[]) {
-  const data = unwrap(
-    await supabase.rpc("call_next", {
-      p_sector_id: sectorId,
-      p_station_id: stationId,
-      ...(attendant ? { p_attendant: attendant } : {}),
-      ...(typeIds.length ? { p_type_ids: typeIds } : {}),
-    }),
-  ) as TicketStep | null;
-  return data && data.id ? data : null;
+  return (await callNextFn({ data: { sectorId, stationId, attendant: attendant || undefined, typeIds } })) as TicketStep | null;
 }
 
 export async function callStep(stepId: string, stationId: string, attendant: string) {
-  return unwrap(
-    await supabase.rpc("call_step", { p_step_id: stepId, p_station_id: stationId, ...(attendant ? { p_attendant: attendant } : {}) }),
-  );
+  return callStepFn({ data: { stepId, stationId, attendant: attendant || undefined } });
 }
 
 export async function startStep(stepId: string, attendant: string) {
-  return unwrap(await supabase.rpc("start_step", { p_step_id: stepId, ...(attendant ? { p_attendant: attendant } : {}) }));
+  return startStepFn({ data: { stepId, attendant: attendant || undefined } });
 }
 
 export async function finishStep(stepId: string, forwardSectorIds: string[], attendant: string) {
-  return unwrap(
-    await supabase.rpc("finish_step", {
-      p_step_id: stepId,
-      ...(forwardSectorIds.length ? { p_forward_sector_ids: forwardSectorIds } : {}),
-      ...(attendant ? { p_attendant: attendant } : {}),
-    }),
-  ) as Ticket;
+  return (await finishStepFn({ data: { stepId, forwardSectorIds, attendant: attendant || undefined } })) as Ticket;
 }
 
 export async function markNoShow(stepId: string, attendant: string) {
-  return unwrap(await supabase.rpc("mark_no_show", { p_step_id: stepId, ...(attendant ? { p_attendant: attendant } : {}) }));
+  return markNoShowFn({ data: { stepId, attendant: attendant || undefined } });
 }
 
 export async function requeueStep(stepId: string) {
-  return unwrap(await supabase.rpc("requeue_step", { p_step_id: stepId }));
+  return requeueStepFn({ data: { stepId } });
 }
 
 export async function cancelTicket(ticketId: string, reason?: string) {
-  return unwrap(await supabase.rpc("cancel_ticket", { p_ticket_id: ticketId, ...(reason ? { p_reason: reason } : {}) }));
+  return cancelTicketFn({ data: { ticketId, ...(reason ? { reason } : {}) } });
 }
 
 export async function setPatientName(ticketId: string, name: string) {
-  unwrap(await supabase.from("tickets").update({ patient_name: name.trim() || null }).eq("id", ticketId).select());
+  await setPatientNameFn({ data: { ticketId, name } });
 }
 
 /* ---------- Pure helpers ---------- */
