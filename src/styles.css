@@ -190,8 +190,7 @@
 
 @page { size: 80mm 50mm; margin: 0; }
 @media print {
-  html, body { width: 80mm; height: 50mm; overflow: hidden; }
   body * { visibility: hidden; }
   .print-ticket, .print-ticket * { visibility: visible; }
-  .print-ticket { position: fixed; inset: 0; display: flex !important; align-items: flex-start; justify-content: center; padding-top: 0; height: 50mm; background: white; color: black; }
+  .print-ticket { position: absolute; top: 0; left: 0; right: 0; display: flex !important; align-items: flex-start; justify-content: center; padding-top: 0; height: 50mm; background: white; color: black; }
 }
