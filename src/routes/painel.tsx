@@ -135,9 +135,32 @@ function Panel() {
   const current = calls[0];
   const history = calls.slice(1, 1 + Math.max(1, settings.panel_history_count));
 
+  function goFullscreen() {
+    const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
+    if (document.fullscreenElement) return;
+    try {
+      const r = el.requestFullscreen ? el.requestFullscreen() : el.webkitRequestFullscreen?.();
+      if (r && typeof (r as Promise<void>).catch === "function") (r as Promise<void>).catch(() => {});
+    } catch {
+      /* fullscreen not allowed */
+    }
+  }
+
+  // Browsers only allow fullscreen after a touch/click/key, so enter it on the first interaction.
+  useEffect(() => {
+    const onFirst = () => goFullscreen();
+    window.addEventListener("pointerdown", onFirst);
+    window.addEventListener("keydown", onFirst);
+    return () => {
+      window.removeEventListener("pointerdown", onFirst);
+      window.removeEventListener("keydown", onFirst);
+    };
+  }, []);
+
   function enableSound() {
     if (activatingRef.current) return;
     activatingRef.current = true;
+    goFullscreen();
     if (!isSpeechSynthesisSupported()) {
       setSpeechAvailable(false);
       setSoundOn(true);
@@ -175,8 +198,8 @@ function Panel() {
   }, [soundOn]);
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-panel-gradient text-panel-foreground">
-      <header className="flex items-center gap-5 border-b border-panel-border px-8 py-4">
+    <div className="flex h-[100dvh] flex-col overflow-hidden bg-panel-gradient text-panel-foreground">
+      <header className="flex items-center gap-5 border-b border-panel-border px-6 py-3">
         <UnitLogo settings={settings} className="h-12 w-12" />
         <div>
           <div className="text-2xl font-bold">{settings.unit_name}</div>
@@ -184,28 +207,28 @@ function Panel() {
         </div>
         <div className="ml-auto flex items-center gap-4">
           <Clock withDate className="text-3xl font-bold tabular-nums" />
-          <Button variant="panel" size="icon" onClick={() => document.documentElement.requestFullscreen?.()} title="Tela cheia">
+          <Button variant="panel" size="icon" onClick={goFullscreen} title="Tela cheia">
             <Maximize />
           </Button>
         </div>
       </header>
 
-      <main className="grid flex-1 grid-cols-1 gap-6 overflow-hidden p-6 lg:grid-cols-[1.6fr_1fr] lg:p-8">
+      <main className="grid min-h-0 flex-1 grid-cols-[1.6fr_1fr] gap-4 overflow-hidden p-4 lg:gap-6 lg:p-6">
         <section
           key={flashKey ?? current?.id ?? "none"}
-          className={`flex flex-col items-center justify-center rounded-[2rem] border border-panel-border bg-panel-raised p-8 text-center ${
+          className={`flex flex-col items-center justify-center min-h-0 rounded-[2rem] border border-panel-border bg-panel-raised p-6 text-center ${
             flashKey && current && flashKey === current.id ? "animate-call-flash" : ""
           }`}
         >
           {current ? (
             <>
               <div className="text-2xl font-semibold uppercase tracking-[0.3em] text-panel-muted">Senha</div>
-              <div className="ticket-code mt-4 text-[clamp(6rem,17vw,16rem)] text-call">{current.code}</div>
+              <div className="ticket-code mt-4 text-[clamp(4rem,min(15vw,26vh),16rem)] text-call">{current.code}</div>
               {current.priority && (
                 <div className="mt-2 rounded-full bg-priority px-4 py-1 text-lg font-semibold text-priority-foreground">Preferencial</div>
               )}
-              <div className="mt-8 text-[clamp(1.8rem,3.6vw,3.6rem)] font-bold leading-tight">{current.sector_name}</div>
-              <div className="mt-2 text-[clamp(1.5rem,3vw,3rem)] font-semibold text-call">{current.station_name}</div>
+              <div className="mt-4 text-[clamp(1.5rem,min(3.4vw,6vh),3.6rem)] font-bold leading-tight">{current.sector_name}</div>
+              <div className="mt-2 text-[clamp(1.25rem,min(2.8vw,5vh),3rem)] font-semibold text-call">{current.station_name}</div>
             </>
           ) : (
             <div className="text-3xl text-panel-muted">Aguardando chamadas…</div>
@@ -214,10 +237,10 @@ function Panel() {
 
         <section className="flex min-h-0 flex-col rounded-[2rem] border border-panel-border bg-panel-raised/60 p-6">
           <h2 className="text-lg font-semibold uppercase tracking-[0.2em] text-panel-muted">Últimas chamadas</h2>
-          <ul className="mt-4 flex-1 space-y-3 overflow-hidden">
+          <ul className="mt-3 grid min-h-0 flex-1 auto-rows-fr gap-2 overflow-hidden">
             {history.map((c) => (
-              <li key={c.id} className="animate-rise flex items-center gap-4 rounded-2xl border border-panel-border bg-panel px-5 py-3">
-                <span className="ticket-code w-36 shrink-0 text-5xl">{c.code}</span>
+              <li key={c.id} className="animate-rise flex min-h-0 items-center gap-4 rounded-2xl border border-panel-border bg-panel px-4 py-2">
+                <span className="ticket-code w-28 shrink-0 text-[clamp(1.75rem,min(3.2vw,5.5vh),3rem)]">{c.code}</span>
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-xl font-semibold">{c.sector_name}</div>
                   <div className="truncate text-lg text-call">{c.station_name}</div>
