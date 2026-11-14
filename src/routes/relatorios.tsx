@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { keepPreviousData, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Download, History, Search, Save, Trash2 } from "lucide-react";
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
 import { supabase } from "@/integrations/supabase/client";
@@ -90,7 +90,10 @@ function Reports() {
   const [from, setFrom] = useState(today);
   const [to, setTo] = useState(today);
   const [search, setSearch] = useState("");
-  const [historyId, setHistoryId] = useState<string | null>(null);\n  const [savedReports, setSavedReports] = useState<SavedReport[]>(loadSavedReports);\n  const [saveMessage, setSaveMessage] = useState("");
+  const [historyId, setHistoryId] = useState<string | null>(null);
+  const [savedReports, setSavedReports] = useState<SavedReport[]>([]);
+  useEffect(() => setSavedReports(loadSavedReports()), []);
+  const [saveMessage, setSaveMessage] = useState("");
 
   const { data: tickets = [], isFetching, error } = useQuery({
     queryKey: ["report", from, to],
@@ -225,7 +228,8 @@ function Reports() {
             <Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} className="h-9 w-40" />
             <span className="text-sm text-muted-foreground">até</span>
             <Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} className="h-9 w-40" />
-            <Button variant="outline" onClick={saveReport} disabled={!tickets.length || isFetching}><Save /> Salvar relatório</Button>\n            <Button variant="outline" onClick={exportCsv} disabled={!tickets.length}><Download /> CSV</Button>
+            <Button variant="outline" onClick={saveReport} disabled={!tickets.length || isFetching}><Save /> Salvar relatório</Button>
+            <Button variant="outline" onClick={exportCsv} disabled={!tickets.length}><Download /> CSV</Button>
           </>
         }
       />
