@@ -133,6 +133,29 @@ function Panel() {
   const current = calls[0];
   const history = calls.slice(1, 1 + Math.max(1, settings.panel_history_count));
 
+  // Rows must never clip their text: measure the list, drop the oldest calls that
+  // would not fit legibly, and size every line of text to the height each row gets.
+  const listRef = useRef<HTMLUListElement>(null);
+  const [listH, setListH] = useState(0);
+  useEffect(() => {
+    const ul = listRef.current;
+    if (!ul) return;
+    const measure = () => setListH(ul.clientHeight);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(ul);
+    return () => ro.disconnect();
+  }, []);
+
+  const ROW_GAP = 8;
+  const MIN_ROW = 46;
+  const visible =
+    listH > 0
+      ? Math.max(1, Math.min(history.length, Math.floor((listH + ROW_GAP) / (MIN_ROW + ROW_GAP))))
+      : history.length;
+  const shown = history.slice(0, visible);
+  const rowH = visible > 0 ? Math.max(MIN_ROW, (listH - (visible - 1) * ROW_GAP) / visible) : MIN_ROW;
+
   function goFullscreen() {
     const el = document.documentElement as HTMLElement & { webkitRequestFullscreen?: () => void };
     if (document.fullscreenElement) return;
@@ -235,18 +258,26 @@ function Panel() {
 
         <section className="flex min-h-0 flex-col rounded-[2rem] border border-panel-border bg-panel-raised/60 p-6">
           <h2 className="text-lg font-semibold uppercase tracking-[0.2em] text-panel-muted">Últimas chamadas</h2>
-          <ul className="mt-3 grid min-h-0 flex-1 auto-rows-fr gap-2 overflow-hidden">
-            {history.map((c) => (
-              <li key={c.id} className="animate-rise flex min-h-0 items-center gap-4 rounded-2xl border border-panel-border bg-panel px-4 py-2">
-                <span className="ticket-code w-28 shrink-0 text-[clamp(1.75rem,min(3.2vw,5.5vh),3rem)]">{c.code}</span>
+          <ul ref={listRef} className="mt-3 grid min-h-0 flex-1 auto-rows-fr gap-2 overflow-hidden">
+            {shown.map((c) => (
+              <li key={c.id} className="animate-rise flex min-h-0 items-center gap-3 rounded-2xl border border-panel-border bg-panel px-3 py-1">
+                <span className="ticket-code shrink-0 leading-none" style={{ fontSize: rowH * 0.42 }}>
+                  {c.code}
+                </span>
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-xl font-semibold">{c.sector_name}</div>
-                  <div className="truncate text-lg text-call">{c.station_name}</div>
+                  <div className="leading-tight font-semibold" style={{ fontSize: rowH * 0.23 }}>
+                    {c.sector_name}
+                  </div>
+                  <div className="leading-tight text-call" style={{ fontSize: rowH * 0.2 }}>
+                    {c.station_name}
+                  </div>
                 </div>
-                <span className="text-sm text-panel-muted tabular-nums">{formatTime(c.created_at)}</span>
+                <span className="shrink-0 text-panel-muted tabular-nums" style={{ fontSize: rowH * 0.16 }}>
+                  {formatTime(c.created_at)}
+                </span>
               </li>
             ))}
-            {history.length === 0 && <li className="text-panel-muted">Sem chamadas anteriores.</li>}
+            {shown.length === 0 && <li className="text-panel-muted">Sem chamadas anteriores.</li>}
           </ul>
         </section>
       </main>
