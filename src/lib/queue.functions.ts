@@ -328,3 +328,67 @@ export const deleteRoutingRuleFn = createServerFn({ method: "POST" })
     check(await sb.from("routing_rules").delete().eq("id", data.id));
     return true;
   });
+
+const sectorSchema = z
+  .object({
+    name: shortText(80).min(1),
+    kind: z.enum(["reception", "service"]),
+    call_phrase: shortText(120),
+    station_label: shortText(40),
+    sort_order: z.number().int().min(-1000).max(100000),
+    active: z.boolean(),
+    call_mode: z.string().max(40),
+    priority_ratio: z.number().int().min(1).max(10),
+    auto_next_sector_id: id.nullable(),
+  })
+  .partial()
+  .strict();
+
+export const createSectorFn = createServerFn({ method: "POST" })
+  .validator(z.object({ sort_order: z.number().int().min(0).max(100000) }))
+  .handler(async ({ data }) => {
+    const sb = await db();
+    check(await sb.from("sectors").insert({ name: "Novo setor", call_phrase: "ao novo setor", sort_order: data.sort_order }).select("id"));
+    return true;
+  });
+
+export const updateSectorFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id, values: sectorSchema }))
+  .handler(async ({ data }) => {
+    if (data.values.auto_next_sector_id === data.id) throw new Error("Um setor não pode encaminhar para ele mesmo");
+    const sb = await db();
+    check(await sb.from("sectors").update(data.values as TablesUpdate<"sectors">).eq("id", data.id).select("id"));
+    return true;
+  });
+
+export const deleteSectorFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id }))
+  .handler(async ({ data }) => {
+    const sb = await db();
+    check(await sb.from("sectors").delete().eq("id", data.id));
+    return true;
+  });
+
+export const createStationFn = createServerFn({ method: "POST" })
+  .validator(z.object({ sector_id: id, name: shortText(60).min(1), sort_order: z.number().int().min(0).max(100000) }))
+  .handler(async ({ data }) => {
+    const sb = await db();
+    check(await sb.from("stations").insert(data).select("id"));
+    return true;
+  });
+
+export const updateStationFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id, values: z.object({ name: shortText(60).min(1), active: z.boolean() }).partial().strict() }))
+  .handler(async ({ data }) => {
+    const sb = await db();
+    check(await sb.from("stations").update(data.values as TablesUpdate<"stations">).eq("id", data.id).select("id"));
+    return true;
+  });
+
+export const deleteStationFn = createServerFn({ method: "POST" })
+  .validator(z.object({ id }))
+  .handler(async ({ data }) => {
+    const sb = await db();
+    check(await sb.from("stations").delete().eq("id", data.id));
+    return true;
+  });

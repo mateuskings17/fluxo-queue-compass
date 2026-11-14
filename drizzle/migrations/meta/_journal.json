@@ -15,6 +15,13 @@
       "when": 1794651653740,
       "tag": "0001_lock_queue_tables",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794659688557,
+      "tag": "0002_lock_sectors_stations_types",
+      "breakpoints": true
     }
   ]
 }

@@ -2,9 +2,8 @@ import { useState } from "react";
 import { Plus, RotateCcw, Trash2, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { supabase } from "@/integrations/supabase/client";
 import {
-  closeOpenTicketsFn, createRoutingRuleFn, createTicketTypeFn, deleteRoutingRuleFn, deleteTicketTypeFn,
+  closeOpenTicketsFn, createSectorFn, updateSectorFn, deleteSectorFn, createStationFn, updateStationFn, deleteStationFn, createRoutingRuleFn, createTicketTypeFn, deleteRoutingRuleFn, deleteTicketTypeFn,
   resetTicketNumberingFn, updateRoutingRuleFn, updateTicketTypeFn,
 } from "@/lib/queue.functions";
 import { CALL_MODE_LABEL, nextTicketCode, todayISO, type AppConfig, type RoutingRule, type Sector, type Station, type TicketType } from "@/lib/queue";
@@ -26,7 +25,7 @@ export function SectorsAdmin({ config }: { config: AppConfig }) {
         <Button
           disabled={saving}
           onClick={() =>
-            mutate(() => supabase.from("sectors").insert({ name: "Novo setor", call_phrase: "ao novo setor", sort_order: config.sectors.length + 1 }), "Setor criado")
+            mutate(() => createSectorFn({ data: { sort_order: config.sectors.length + 1 } }), "Setor criado")
           }
         >
           <Plus /> Novo setor
@@ -61,14 +60,14 @@ function SectorRow({ sector }: { sector: Sector }) {
       <Field label="Ordem"><Input type="number" value={f.sort_order} onChange={(e) => setF({ ...f, sort_order: Number(e.target.value) })} /></Field>
       <Field label="Ativo"><div className="flex h-9 items-center"><Switch checked={f.active} onCheckedChange={(v) => setF({ ...f, active: v })} /></div></Field>
       <div className="flex gap-1">
-        <Button disabled={saving} onClick={() => mutate(() => supabase.from("sectors").update(f).eq("id", sector.id))}>Salvar</Button>
+        <Button disabled={saving} onClick={() => mutate(() => updateSectorFn({ data: { id: sector.id, values: f as never } }))}>Salvar</Button>
         <Button
           variant="ghost"
           size="icon"
           title="Excluir"
           onClick={() => {
             if (window.confirm(`Excluir o setor ${sector.name}? As salas/guichês dele também serão removidos. O histórico é mantido.`)) {
-              void mutate(() => supabase.from("sectors").delete().eq("id", sector.id), "Setor excluído");
+              void mutate(() => deleteSectorFn({ data: { id: sector.id } }), "Setor excluído");
             }
           }}
         >
@@ -94,7 +93,7 @@ export function StationsAdmin({ config }: { config: AppConfig }) {
             title={sector.name}
             description={`${list.length} ${sector.station_label.toLowerCase()}(s)`}
             actions={
-              <Button variant="outline" size="sm" disabled={saving} onClick={() => mutate(() => supabase.from("stations").insert({ sector_id: sector.id, name: nextName, sort_order: list.length + 1 }), `${nextName} criado(a)`)}>
+              <Button variant="outline" size="sm" disabled={saving} onClick={() => mutate(() => createStationFn({ data: { sector_id: sector.id, name: nextName, sort_order: list.length + 1 } }), `${nextName} criado(a)`)}>
                 <Plus /> {sector.station_label}
               </Button>
             }
@@ -116,9 +115,9 @@ function StationRow({ station }: { station: Station }) {
   return (
     <div className="flex items-center gap-2">
       <Input value={name} onChange={(e) => setName(e.target.value)} />
-      <Switch checked={station.active} onCheckedChange={(v) => mutate(() => supabase.from("stations").update({ active: v }).eq("id", station.id), v ? "Ativado" : "Desativado")} />
-      <Button variant="outline" size="sm" disabled={saving || name === station.name} onClick={() => mutate(() => supabase.from("stations").update({ name }).eq("id", station.id))}>Salvar</Button>
-      <Button variant="ghost" size="icon" onClick={() => window.confirm(`Excluir ${station.name}?`) && mutate(() => supabase.from("stations").delete().eq("id", station.id), "Excluído")}>
+      <Switch checked={station.active} onCheckedChange={(v) => mutate(() => updateStationFn({ data: { id: station.id, values: { active: v } } }), v ? "Ativado" : "Desativado")} />
+      <Button variant="outline" size="sm" disabled={saving || name === station.name} onClick={() => mutate(() => updateStationFn({ data: { id: station.id, values: { name } } }))}>Salvar</Button>
+      <Button variant="ghost" size="icon" onClick={() => window.confirm(`Excluir ${station.name}?`) && mutate(() => deleteStationFn({ data: { id: station.id } }), "Excluído")}>
         <Trash2 />
       </Button>
     </div>
@@ -273,7 +272,7 @@ function AutoNextAdmin({ config }: { config: AppConfig }) {
           <Field key={s.id} label={`Depois de ${s.name}`}>
             <NativeSelect
               value={s.auto_next_sector_id ?? ""}
-              onChange={(e) => mutate(() => supabase.from("sectors").update({ auto_next_sector_id: e.target.value || null }).eq("id", s.id))}
+              onChange={(e) => mutate(() => updateSectorFn({ data: { id: s.id, values: { auto_next_sector_id: e.target.value || null } } }))}
             >
               <option value="">Finalizar atendimento</option>
               {config.sectors.filter((o) => o.id !== s.id).map((o) => <option key={o.id} value={o.id}>Enviar para {o.name}</option>)}
@@ -333,7 +332,7 @@ function QueueRow({ sector }: { sector: Sector }) {
       <Field label="Normais entre preferenciais" hint={mode === "alternate" ? `1 preferencial a cada ${ratio} normais` : "Usado no modo intercalar"}>
         <Input type="number" min={1} max={10} disabled={mode !== "alternate"} value={ratio} onChange={(e) => setRatio(Math.max(1, Number(e.target.value) || 1))} />
       </Field>
-      <Button disabled={saving} onClick={() => mutate(() => supabase.from("sectors").update({ call_mode: mode, priority_ratio: ratio }).eq("id", sector.id))}>Salvar</Button>
+      <Button disabled={saving} onClick={() => mutate(() => updateSectorFn({ data: { id: sector.id, values: { call_mode: mode, priority_ratio: ratio } } }))}>Salvar</Button>
     </div>
   );
 }
