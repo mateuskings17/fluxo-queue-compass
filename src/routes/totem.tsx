@@ -1,4 +1,4 @@
-import { createPortal } from "react-dom";
+import { createPortal, flushSync } from "react-dom";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
@@ -18,6 +18,8 @@ export const Route = createFileRoute("/totem")({
       { name: "description", content: "Retire sua senha de atendimento." },
       { property: "og:title", content: "Totem de senhas" },
       { property: "og:description", content: "Retire sua senha de atendimento." },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary" },
     ],
   }),
   loader: ({ context }) => context.queryClient.ensureQueryData(configQuery),
@@ -36,27 +38,43 @@ function Totem() {
   const [busy, setBusy] = useState<string | null>(null);
   const [issued, setIssued] = useState<Ticket | null>(null);
   const [countdown, setCountdown] = useState(AUTO_CLOSE_SECONDS);
+  const [printing, setPrinting] = useState(false);
 
   useEffect(() => {
-    if (!issued) return;
+    if (!issued || printing) return;
     setCountdown(AUTO_CLOSE_SECONDS);
     const i = setInterval(() => setCountdown((c) => c - 1), 1000);
     return () => clearInterval(i);
-  }, [issued]);
+  }, [issued, printing]);
 
   useEffect(() => {
-    if (issued && countdown <= 0) setIssued(null);
-  }, [countdown, issued]);
+    if (issued && !printing && countdown <= 0) setIssued(null);
+  }, [countdown, issued, printing]);
+
+  function printReceipt(ticket: Ticket) {
+    // Commit the portal before printing, without a timer that can be throttled
+    // or leave the browser's activation window. Silent printing still requires
+    // kiosk-printing configuration on the totem's browser.
+    flushSync(() => {
+      setIssued(ticket);
+      setPrinting(true);
+      setCountdown(AUTO_CLOSE_SECONDS);
+    });
+    try {
+      window.print();
+    } catch {
+      toast.error("Não foi possível abrir a impressão. Toque em Imprimir novamente.");
+    } finally {
+      setPrinting(false);
+    }
+  }
 
   async function handleIssue(typeId: string) {
     if (busy) return;
     setBusy(typeId);
     try {
       const t = await issueTicket(typeId);
-      setIssued(t);
-      // Imprime automaticamente assim que a senha é emitida.
-      // O pequeno atraso espera o comprovante ser renderizado na página.
-      window.setTimeout(() => window.print(), 300);
+      printReceipt(t);
     } catch (e) {
       toast.error("Não foi possível emitir a senha", { description: e instanceof Error ? e.message : undefined });
     } finally {
@@ -132,7 +150,7 @@ function Totem() {
             </p>
             <p className="mt-6 text-lg">Aguarde a chamada no painel.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
-              <Button variant="outline" size="xl" className="flex-1" onClick={() => window.print()}>
+              <Button variant="outline" size="xl" className="flex-1" disabled={printing} onClick={() => printReceipt(issued)}>
                 <Printer /> Imprimir novamente
               </Button>
               <Button size="xl" className="flex-1" onClick={() => setIssued(null)}>
