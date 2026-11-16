@@ -54,6 +54,9 @@ function Totem() {
     try {
       const t = await issueTicket(typeId);
       setIssued(t);
+      // Imprime automaticamente assim que a senha é emitida.
+      // O pequeno atraso espera o comprovante ser renderizado na página.
+      window.setTimeout(() => window.print(), 300);
     } catch (e) {
       toast.error("Não foi possível emitir a senha", { description: e instanceof Error ? e.message : undefined });
     } finally {
@@ -130,7 +133,7 @@ function Totem() {
             <p className="mt-6 text-lg">Aguarde a chamada no painel.</p>
             <div className="mt-8 flex flex-col gap-3 sm:flex-row">
               <Button variant="outline" size="xl" className="flex-1" onClick={() => window.print()}>
-                <Printer /> Imprimir
+                <Printer /> Imprimir novamente
               </Button>
               <Button size="xl" className="flex-1" onClick={() => setIssued(null)}>
                 Concluir ({Math.max(countdown, 0)})
