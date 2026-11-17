@@ -22,6 +22,13 @@
       "when": 1794659688557,
       "tag": "0002_lock_sectors_stations_types",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1794910949919,
+      "tag": "0003_issue_ticket_no_duplicate_codes",
+      "breakpoints": true
     }
   ]
 }
